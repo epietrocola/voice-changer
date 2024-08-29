@@ -28,12 +28,15 @@ import multiprocessing as mp
 
 from mods.log_control import VoiceChangaerLogger
 
+import asyncio
+import websockets
+import threading
+
 
 if __name__ == "__main__":
     VoiceChangaerLogger.get_instance().initialize(initialize=True)
 else:
     VoiceChangaerLogger.get_instance().initialize(initialize=False)
-
 
 logger = VoiceChangaerLogger.get_instance().getLogger()
 logger.debug(f"---------------- Booting PHASE :{__name__} -----------------")
@@ -135,6 +138,10 @@ def localServer(logLevel: str = "critical", key_path: str | None = None, cert_pa
     except Exception as e:
         logger.error(f"[Voice Changer] Web Server Launch Exception, {e}")
 
+def run_websocket_server(voiceChangerManager):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(start_websocket_server(voiceChangerManager))
 
 if __name__ == "MMVCServerSIO":
     mp.freeze_support()
@@ -143,10 +150,18 @@ if __name__ == "MMVCServerSIO":
     app_fastapi = MMVC_Rest.get_instance(voiceChangerManager, voiceChangerParams, args.allowed_origins, PORT)
     app_socketio = MMVC_SocketIOApp.get_instance(app_fastapi, voiceChangerManager, args.allowed_origins, PORT)
 
+    # Start the WebSocket server in a new thread
+    ws_thread = threading.Thread(target=run_websocket_server, args=(voiceChangerManager,))
+    ws_thread.start()
 
 if __name__ == "__mp_main__":
     # printMessage("サーバプロセスを起動しています。", level=2)
     printMessage("The server process is starting up.", level=2)
+
+def run_websocket_server(voiceChangerManager):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(start_websocket_server(voiceChangerManager))
 
 if __name__ == "__main__":
     mp.freeze_support()
@@ -266,3 +281,13 @@ if __name__ == "__main__":
 
         except Exception as e:
             logger.error(f"[Voice Changer] Client Launch Exception, {e}")
+
+async def websocket_handler(websocket, path, voiceChangerManager):
+    async for message in websocket:
+        voiceChangerManager.update_settings("tran", message)
+
+async def start_websocket_server(voiceChangerManager):
+    async with websockets.serve(lambda ws, path: websocket_handler(ws, path, voiceChangerManager), "localhost", 8765):
+        print("WebSocket server started on ws://localhost:8765")
+        await asyncio.Future()  # Run forever
+        
