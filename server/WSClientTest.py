@@ -2,20 +2,14 @@ import sys
 import asyncio
 import websockets
 
-async def hello(number):
+async def hello():
     uri = "ws://localhost:8765"
     async with websockets.connect(uri) as websocket:
-        await websocket.send(number)
-        response = await websocket.recv()
-        print(f"Received from server: {response}")
+        while True:
+            await websocket.send("7")
+            await asyncio.sleep(0.5)  # Delay for 5 seconds
+            await websocket.send("12")
+            await asyncio.sleep(0.5)  # Delay for 5 seconds
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python WSClientTest.py <number>")
-        sys.exit(1)
-
-    # Get the number from command-line arguments
-    number = sys.argv[1]
-
-    # Run the WebSocket client
-    asyncio.run(hello(number))
+    asyncio.get_event_loop().run_until_complete(hello())
